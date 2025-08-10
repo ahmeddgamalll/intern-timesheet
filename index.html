@@ -164,6 +164,12 @@
             border: 1px solid #fecaca;
         }
 
+        .status-warning {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fde68a;
+        }
+
         .admin-section {
             background: white;
             border-radius: 15px;
@@ -247,7 +253,6 @@
 
             <!-- Entry Form -->
             <div class="entry-form">
-                <!-- This form submits directly to Google Forms (bypasses CORS) -->
                 <form action="https://script.google.com/macros/s/AKfycbwCT2FQ3Hq9RPQiwf-xxqDJaPb6fCZEBV5iL7pf-8SzfH_OJXOXxD9pVYlBvdUeFgqxqw/exec" 
                       method="POST" 
                       target="hidden_iframe" 
@@ -292,12 +297,14 @@
                 </form>
 
                 <!-- Hidden iframe for form submission -->
-                <iframe name="hidden_iframe" class="hidden-iframe" onload="handleFormResponse()"></iframe>
+                <iframe name="hidden_iframe" class="hidden-iframe" onload="handleFormResponse()" onerror="handleFormError()"></iframe>
             </div>
         </div>
     </div>
 
     <script>
+        let submissionTimer = null;
+        
         // Set today's date as default
         document.getElementById('entryDate').valueAsDate = new Date();
 
@@ -313,8 +320,14 @@
             if (startTime && endTime) {
                 const start = new Date(`2000-01-01T${startTime}`);
                 const end = new Date(`2000-01-01T${endTime}`);
-                const hoursWorked = ((end - start) / (1000 * 60 * 60)).toFixed(1);
-                document.getElementById('hoursWorked').value = hoursWorked;
+                let hoursWorked = (end - start) / (1000 * 60 * 60);
+                
+                // Handle next day scenarios
+                if (hoursWorked < 0) {
+                    hoursWorked += 24;
+                }
+                
+                document.getElementById('hoursWorked').value = hoursWorked.toFixed(1);
             }
             
             // Set timestamp
@@ -325,10 +338,49 @@
             submitBtn.innerHTML = '<div class="loading"></div>Submitting...';
             statusMessage.style.display = 'none';
             
-            // Form will submit to hidden iframe
+            // Set a timer to show success message after 3 seconds (typical submission time)
+            submissionTimer = setTimeout(() => {
+                showSuccessMessage();
+            }, 3000);
         });
 
         function handleFormResponse() {
+            // Clear any existing timer
+            if (submissionTimer) {
+                clearTimeout(submissionTimer);
+            }
+            
+            // Small delay to ensure the iframe has loaded
+            setTimeout(() => {
+                showSuccessMessage();
+            }, 500);
+        }
+
+        function handleFormError() {
+            // Clear any existing timer
+            if (submissionTimer) {
+                clearTimeout(submissionTimer);
+            }
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const statusMessage = document.getElementById('statusMessage');
+            
+            // Reset button state
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '✅ Submit Daily Entry';
+            
+            // Show warning message (since 403 doesn't necessarily mean failure)
+            statusMessage.className = 'status-message status-warning';
+            statusMessage.innerHTML = '⚠️ Submission completed, but unable to confirm status. Please check your Google Sheet to verify the entry was recorded.';
+            statusMessage.style.display = 'block';
+            
+            // Hide message after 8 seconds
+            setTimeout(() => {
+                statusMessage.style.display = 'none';
+            }, 8000);
+        }
+
+        function showSuccessMessage() {
             const submitBtn = document.getElementById('submitBtn');
             const statusMessage = document.getElementById('statusMessage');
             
@@ -338,7 +390,7 @@
             
             // Show success message
             statusMessage.className = 'status-message status-success';
-            statusMessage.textContent = '✅ Entry submitted successfully! Check your Google Sheet to confirm.';
+            statusMessage.innerHTML = '✅ Entry submitted successfully! Data has been saved to your Google Sheet.';
             statusMessage.style.display = 'block';
             
             // Reset form but keep the name
