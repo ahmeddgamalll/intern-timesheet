@@ -199,7 +199,7 @@
             box-shadow: 0 8px 25px rgba(245, 158, 11, 0.3);
         }
 
-        .setup-instructions {
+        .setup-note {
             background: #f0f9ff;
             border: 1px solid #0ea5e9;
             border-radius: 10px;
@@ -207,18 +207,13 @@
             margin-top: 20px;
         }
 
-        .setup-instructions h3 {
+        .setup-note h3 {
             color: #0369a1;
             margin-bottom: 15px;
         }
 
-        .setup-instructions ol {
-            margin-left: 20px;
-            line-height: 1.6;
-        }
-
-        .setup-instructions li {
-            margin-bottom: 8px;
+        .hidden-iframe {
+            display: none;
         }
 
         @media (max-width: 768px) {
@@ -242,26 +237,22 @@
                     🔒 Admin Dashboard
                 </div>
                 <p>Access your Google Sheet with all submissions:</p>
-                <a href="#" id="adminSheetLink" class="admin-link" target="_blank">📊 View All Submissions</a>
-                <a href="#" id="downloadLink" class="admin-link" onclick="downloadAsExcel()">📥 Download as Excel</a>
+                <a href="https://docs.google.com/spreadsheets/d/1S6uQZCtqGqD8U0GkqLXRKyxHqj6DV6Rpa7hBF3vO0Dw/edit?usp=sharing" class="admin-link" target="_blank">📊 View All Submissions</a>
                 
-                <div class="setup-instructions">
-                    <h3>🛠️ Setup Instructions:</h3>
-                    <ol>
-                        <li>Create a new Google Sheet</li>
-                        <li>Add headers: Date, Intern Name, Start Time, End Time, Hours, Tasks, Timestamp</li>
-                        <li>Go to Extensions > Apps Script</li>
-                        <li>Replace default code with the provided Google Apps Script</li>
-                        <li>Deploy as web app with "Anyone" access</li>
-                        <li>Copy the web app URL and paste it in the script below</li>
-                        <li>Share the sheet with yourself and copy the share link</li>
-                    </ol>
+                <div class="setup-note">
+                    <h3>✅ System Status:</h3>
+                    <p>Your timesheet system is configured and ready! Interns can submit their daily work, and all data will appear in your private Google Sheet automatically.</p>
                 </div>
             </div>
 
             <!-- Entry Form -->
             <div class="entry-form">
-                <form id="timesheetForm">
+                <!-- This form submits directly to Google Forms (bypasses CORS) -->
+                <form action="https://script.google.com/macros/s/AKfycbwCT2FQ3Hq9RPQiwf-xxqDJaPb6fCZEBV5iL7pf-8SzfH_OJXOXxD9pVYlBvdUeFgqxqw/exec" 
+                      method="POST" 
+                      target="hidden_iframe" 
+                      id="timesheetForm">
+                    
                     <div class="form-row">
                         <div class="form-group">
                             <label for="internName">👤 Intern Name</label>
@@ -269,7 +260,7 @@
                         </div>
                         <div class="form-group">
                             <label for="entryDate">📅 Date</label>
-                            <input type="date" id="entryDate" name="entryDate" required>
+                            <input type="date" id="entryDate" name="date" required>
                         </div>
                     </div>
 
@@ -289,159 +280,90 @@
                         <textarea id="taskDescription" name="taskDescription" required placeholder="Describe what you worked on today, projects completed, meetings attended, etc."></textarea>
                     </div>
 
+                    <!-- Hidden field for calculated hours -->
+                    <input type="hidden" id="hoursWorked" name="hoursWorked">
+                    <input type="hidden" id="timestamp" name="timestamp">
+
                     <button type="submit" class="submit-btn" id="submitBtn">
                         ✅ Submit Daily Entry
                     </button>
 
                     <div class="status-message" id="statusMessage"></div>
                 </form>
+
+                <!-- Hidden iframe for form submission -->
+                <iframe name="hidden_iframe" class="hidden-iframe" onload="handleFormResponse()"></iframe>
             </div>
         </div>
     </div>
 
     <script>
-        // Configuration - Your Google Apps Script Web App URL
-        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwCT2FQ3Hq9RPQiwf-xxqDJaPb6fCZEBV5iL7pf-8SzfH_OJXOXxD9pVYlBvdUeFgqxqw/exec';
-        const ADMIN_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1S6uQZCtqGqD8U0GkqLXRKyxHqj6DV6Rpa7hBF3vO0Dw/edit?usp=sharing';
-        
-        // Local testing mode - set to false for production
-        const LOCAL_TESTING = false;
-        
-        // Set admin sheet link
-        document.getElementById('adminSheetLink').href = ADMIN_SHEET_URL;
-        
         // Set today's date as default
         document.getElementById('entryDate').valueAsDate = new Date();
 
         // Form submission handler
-        document.getElementById('timesheetForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
+        document.getElementById('timesheetForm').addEventListener('submit', function(e) {
             const submitBtn = document.getElementById('submitBtn');
             const statusMessage = document.getElementById('statusMessage');
+            
+            // Calculate hours worked
+            const startTime = document.getElementById('startTime').value;
+            const endTime = document.getElementById('endTime').value;
+            
+            if (startTime && endTime) {
+                const start = new Date(`2000-01-01T${startTime}`);
+                const end = new Date(`2000-01-01T${endTime}`);
+                const hoursWorked = ((end - start) / (1000 * 60 * 60)).toFixed(1);
+                document.getElementById('hoursWorked').value = hoursWorked;
+            }
+            
+            // Set timestamp
+            document.getElementById('timestamp').value = new Date().toISOString();
             
             // Show loading state
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<div class="loading"></div>Submitting...';
             statusMessage.style.display = 'none';
             
-            try {
-                const formData = new FormData(e.target);
-                
-                // Calculate hours worked
-                const startTime = formData.get('startTime');
-                const endTime = formData.get('endTime');
-                const start = new Date(`2000-01-01T${startTime}`);
-                const end = new Date(`2000-01-01T${endTime}`);
-                const hoursWorked = ((end - start) / (1000 * 60 * 60)).toFixed(1);
-                
-                const data = {
-                    date: formData.get('entryDate'),
-                    internName: formData.get('internName'),
-                    startTime: startTime,
-                    endTime: endTime,
-                    hoursWorked: hoursWorked,
-                    taskDescription: formData.get('taskDescription'),
-                    timestamp: new Date().toISOString()
-                };
-
-                if (LOCAL_TESTING) {
-                    // Simulate successful submission for local testing
-                    console.log('Local testing mode - Entry data:', data);
-                    
-                    // Simulate API delay
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    
-                    // Success
-                    statusMessage.className = 'status-message status-success';
-                    statusMessage.textContent = '✅ Entry submitted successfully! (Local Testing Mode)';
-                    statusMessage.style.display = 'block';
-                    
-                    // Reset form but keep the name
-                    const internName = document.getElementById('internName').value;
-                    e.target.reset();
-                    document.getElementById('internName').value = internName;
-                    document.getElementById('entryDate').valueAsDate = new Date();
-                    
-                } else {
-                    // Submit to Google Sheets using URL parameters (more reliable)
-                    const params = new URLSearchParams({
-                        date: data.date,
-                        internName: data.internName,
-                        startTime: data.startTime,
-                        endTime: data.endTime,
-                        hoursWorked: data.hoursWorked,
-                        taskDescription: data.taskDescription,
-                        timestamp: data.timestamp
-                    });
-
-                    const response = await fetch(`${GOOGLE_SCRIPT_URL}?${params}`, {
-                        method: 'GET',
-                        mode: 'cors'
-                    });
-
-                    const responseText = await response.text();
-                    console.log('Server response:', responseText);
-                    
-                    let result;
-                    try {
-                        result = JSON.parse(responseText);
-                    } catch {
-                        // If response isn't JSON, assume success if no error
-                        result = { success: true };
-                    }
-
-                    if (result.success !== false) {
-                        // Success
-                        statusMessage.className = 'status-message status-success';
-                        statusMessage.textContent = '✅ Entry submitted successfully! Check your Google Sheet.';
-                        statusMessage.style.display = 'block';
-                        
-                        // Reset form but keep the name
-                        const internName = document.getElementById('internName').value;
-                        e.target.reset();
-                        document.getElementById('internName').value = internName;
-                        document.getElementById('entryDate').valueAsDate = new Date();
-                    } else {
-                        throw new Error(result.message || 'Submission failed');
-                    }
-                }
-                
-            } catch (error) {
-                console.error('Error:', error);
-                statusMessage.className = 'status-message status-error';
-                statusMessage.textContent = `❌ Error: ${error.message}. Check console for details.`;
-                statusMessage.style.display = 'block';
-                
-                // Log detailed error info
-                console.log('Detailed error info:', {
-                    error: error,
-                    scriptUrl: GOOGLE_SCRIPT_URL,
-                    data: data
-                });
-            } finally {
-                // Reset button state
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '✅ Submit Daily Entry';
-            }
+            // Form will submit to hidden iframe
         });
 
-        function downloadAsExcel() {
-            // This would trigger a download from your Google Apps Script
-            window.open(GOOGLE_SCRIPT_URL + '?action=download', '_blank');
+        function handleFormResponse() {
+            const submitBtn = document.getElementById('submitBtn');
+            const statusMessage = document.getElementById('statusMessage');
+            
+            // Reset button state
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '✅ Submit Daily Entry';
+            
+            // Show success message
+            statusMessage.className = 'status-message status-success';
+            statusMessage.textContent = '✅ Entry submitted successfully! Check your Google Sheet to confirm.';
+            statusMessage.style.display = 'block';
+            
+            // Reset form but keep the name
+            const internName = document.getElementById('internName').value;
+            document.getElementById('timesheetForm').reset();
+            document.getElementById('internName').value = internName;
+            document.getElementById('entryDate').valueAsDate = new Date();
+            
+            // Hide success message after 5 seconds
+            setTimeout(() => {
+                statusMessage.style.display = 'none';
+            }, 5000);
         }
 
-        // Hide admin section for regular users (you can implement proper authentication)
+        // Admin section toggle
         function toggleAdminSection() {
             const adminSection = document.getElementById('adminSection');
-            const isAdmin = prompt('Enter admin password:') === 'your_admin_password_here';
+            const isAdmin = prompt('Enter admin password:') === 'admin123';
             adminSection.style.display = isAdmin ? 'block' : 'none';
         }
 
         // Initially hide admin section
         document.getElementById('adminSection').style.display = 'none';
         
-        // Add admin access (you can remove this and show admin section only to yourself)
+        // Admin access shortcut
         document.addEventListener('keydown', function(e) {
             if (e.ctrlKey && e.shiftKey && e.key === 'A') {
                 toggleAdminSection();
