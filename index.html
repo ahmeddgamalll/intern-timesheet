@@ -253,7 +253,7 @@
 
             <!-- Entry Form -->
             <div class="entry-form">
-                <form action="https://script.google.com/macros/s/AKfycbwCT2FQ3Hq9RPQiwf-xxqDJaPb6fCZEBV5iL7pf-8SzfH_OJXOXxD9pVYlBvdUeFgqxqw/exec" 
+                <form action="https://script.google.com/macros/s/AKfycbx5yfTL3p_hck9sUR4iERngXUhxwo146I3UElCdNoGkCENxP3UMAl4A5MivoRF2e1X8rA/exec" 
                       method="POST" 
                       target="hidden_iframe" 
                       id="timesheetForm">
@@ -338,10 +338,10 @@
             submitBtn.innerHTML = '<div class="loading"></div>Submitting...';
             statusMessage.style.display = 'none';
             
-            // Set a timer to show success message after 3 seconds (typical submission time)
+            // Set a timer to show success message after 2 seconds (typical submission time)
             submissionTimer = setTimeout(() => {
                 showSuccessMessage();
-            }, 3000);
+            }, 2000);
         });
 
         function handleFormResponse() {
